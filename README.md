@@ -9,7 +9,7 @@
 * **Automated Maintenance:** Remote database optimization and core/plugin updates in a single command.
 * **Disaster Recovery:** Automated database backups transferred locally via SFTP before updates.
 * **Professional Reporting:** Generates a structured Markdown report (`logs/wp_report.md`) after every run.
-* **Orchestrated Workflow:** Full lifecycle management from container spin-up to environment teardown via `make`.
+* **Portable Distribution:** Can be compiled into a standalone, path-aware binary for zero-dependency execution.
 
 ---
 
@@ -18,7 +18,7 @@
 * **Python 3.14+** (Utilizing `NamedTuple`, `Protocol` typing, and `Paramiko`)
 * **Package Management:** **Conda** (Isolation) + **uv** (High-speed resolution)
 * **Infrastructure:** **Docker & Docker Compose** (LAMP stack + MariaDB)
-* **Orchestration:** **GNU Make**
+* **Orchestration:** **GNU Make** (Self-documenting build system)
 * **CMS Tooling:** **WP-CLI**
 
 ---
@@ -34,8 +34,8 @@ This project uses **Conda** for the runtime and **uv** for library synchronizati
 conda env create -f environment.yml
 conda activate wp-automator
 
-# Sync dependencies
-uv pip install -r requirements.txt
+# Sync dependencies using the optimized uv manager
+make setup
 
 ```
 
@@ -54,27 +54,22 @@ make up
 
 ### Workflow Automation (via Make)
 
-The `Makefile` provides a high-level interface for all common tasks.
+The `Makefile` serves as the primary entry point. Run `make` or `make help` to see all available commands.
 
 | Command | Action |
 | --- | --- |
-| `make up` | Builds containers, waits for SSH, and performs a fresh `--clean --setup`. |
+| `make up` | Builds containers, waits for SSH, and performs a fresh `--setup`. |
 | `make maint` | Triggers `--update` (with backup) and `--optimize`. |
 | `make check` | Runs a standard health check and generates the Markdown report. |
-| `make down` | Stops containers and removes Docker volumes. |
-| `make clean` | Full teardown: runs `make down` and deletes local `logs/` directory. |
-| `make all` | Executes a full lifecycle: Up → Check → Interactive Cleanup. |
+| `make dist` | Compiles the project into a standalone binary in `./dist`. |
+| `make clean` | Full teardown: removes containers, logs, and build artifacts. |
 
-### Manual Execution (via Python CLI)
+### Standalone Binary Execution
 
-For granular control or targeting external servers, use the Python CLI directly:
+Once built via `make dist`, the tool can be run as a single executable without a Python environment. It is fully path-aware and will create its own `logs/` directory in its current location.
 
 ```bash
-# Target a specific external host
-python main.py --host 1.2.3.4 --user deploy --passw secret123 --update
-
-# Perform only a database optimization
-python main.py --optimize
+./dist/maxx-wp --host 1.2.3.4 --user deploy --update
 
 ```
 
@@ -82,12 +77,13 @@ python main.py --optimize
 
 ## Project Structure
 
-* **`main.py`**: The core automation logic using Paramiko and WP-CLI.
-* **`Makefile`**: Short-hand aliases for infrastructure and script execution.
-* **`logs/`**:
-* `wp_report.md`: Detailed diagnostic findings.
-* `wp_backup_[timestamp].sql`: Database snapshots pulled via SFTP.
-* `maintenance_[date].log`: Technical execution logs.
+* **`main.py`**: Core automation logic with binary-safe path resolution.
+* **`Makefile`**: Orchestration logic for Docker, dependencies, and PyInstaller.
+* **`environment.yml`**: Streamlined Conda environment manifest.
+* **`logs/`**: (Auto-generated relative to execution point)
+    * `wp_report.md`: Detailed diagnostic findings.
+    * `wp_backup_[timestamp].sql`: Local database snapshots.
+    * `maintenance_[date].log`: Technical execution logs.
 
 
 
@@ -95,13 +91,13 @@ python main.py --optimize
 
 ## Security & Architecture
 
-* **Non-Root Execution:** The tool connects as `testuser`. The Docker environment utilizes consistent ownership between the SSH user and the Apache web server.
+* **Binary-Safe Pathing:** Uses `sys.frozen` detection to ensure file I/O (logs/backups) is always relative to the executable path, preventing data loss in temporary directories.
+* **Non-Root Execution:** Operations are performed as `testuser` with consistent ownership between SSH and the web server.
 * **Command Sanitization:** All remote commands are wrapped in `shlex.quote()` to prevent shell injection.
-* **Idempotency:** The `--setup` routine verifies existing `wp-config.php` files to prevent accidental data overwrites on active sites.
-* **Local-Remote Synergy:** By combining `paramiko.SSHClient` for commands and `SFTPClient` for backups, the tool ensures data is never left solely on the remote server during risky updates.
+* **Idempotency:** The `--setup` routine verifies existing configurations to prevent accidental overwrites.
 
 ---
 
 ### Project Impact
 
-> Developed as a DevOps utility to eliminate manual WordPress audit tasks. By orchestrating SSH connections with WP-CLI, this tool ensures that remote environments remain secure, updated, and optimized with zero manual intervention.
+> Developed as a DevOps utility to eliminate manual WordPress audit tasks. By orchestrating SSH connections with WP-CLI and bundling the logic into a portable binary, this tool ensures that remote environments remain secure, updated, and optimized with zero manual intervention or local dependency overhead.
