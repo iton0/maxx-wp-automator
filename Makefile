@@ -66,7 +66,7 @@ dist-clean: ## Remove build artifacts and .spec files
 	rm -rf build/ dist/ $(BINARY_NAME).spec
 
 .PHONY: clean
-clean: down dist-clean ## Full wipe: Stop Docker and delete logs/builds
+clean: down ## Full wipe: Stop Docker and delete logs/builds
 	rm -rf logs/
 	@echo "Environment fully reset."
 
