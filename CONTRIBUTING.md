@@ -1,13 +1,12 @@
 # Contributing to maxx-wp-automator
 
-First off, thank you for considering contributing to **maxx-wp-automator**! It’s people like you that make the open-source community such an amazing place to learn, inspire, and create.
+First off, thank you for considering contributing to **maxx-wp-automator**! This project aims to maintain high standards for DevOps automation, and your help is vital.
 
-## 🛠️ Development Setup
+## Development Setup
 
-Since this project uses a specific **Python 3.14+** environment and **Docker**, please follow these steps to set up your local development environment:
+This project requires **Python 3.14**, **Docker**, and the **uv** package manager. We use a strictly isolated environment to ensure binary builds are consistent.
 
-1. **Fork the Repository** on GitHub.
-2. **Clone your Fork:**
+1. **Fork and Clone:**
 ```bash
 git clone https://github.com/your-username/maxx-wp-automator.git
 cd maxx-wp-automator
@@ -15,44 +14,64 @@ cd maxx-wp-automator
 ```
 
 
-3. **Set up the Environment:**
-We use Conda and `uv` to manage dependencies.
+2. **Initialize the Environment:**
+We use Conda for the interpreter and `uv` for lightning-fast dependency resolution.
 ```bash
 conda env create -f environment.yml
 conda activate wp-automator
-uv pip install -r requirements.txt
+make setup
 
 ```
 
 
-4. **Launch the Test Infrastructure:**
+3. **Spin Up Test Infrastructure:**
+The included `Makefile` handles the Docker orchestration and WordPress bootstrapping automatically.
 ```bash
-docker compose up -d --build
+make up
 
 ```
 
 
 
-## 📜 Contribution Guidelines
+---
 
-### 1. Reporting Bugs
+## Contribution Guidelines
 
-* Use the **GitHub Issues** tab.
-* Describe the bug and provide steps to reproduce it.
-* Include your OS version and the output of `python --version`.
+### 1. Development Standards
 
-### 2. Suggesting Enhancements
+* **Static Analysis:** We use `ruff` for linting and formatting.
+* **Type Safety:** We use `pyright` (or `basedpyright`) for type checking. Ensure your `Protocol` and `NamedTuple` implementations are correctly typed.
+* **Binary Awareness:** Any feature involving file I/O must use the `get_base_path()` utility in `main.py` to ensure compatibility with PyInstaller's "frozen" state.
 
-* Open a **GitHub Issue** and describe the feature you'd like to see.
-* Explain why this feature would be useful to other users.
+### 2. Pull Request (PR) Process
 
-### 3. Pull Requests (PRs)
+1. **Branching:** Create a feature branch (`feat/name`) or bugfix branch (`fix/name`).
+2. **Local Validation:** Before submitting, ensure your code passes the following:
+```bash
+make check   # Validate app logic
+make dist    # Ensure the project still compiles to a binary
 
-* **Branch Naming:** Use descriptive names like `fix/connection-timeout` or `feat/slack-notifications`.
-* **Code Style:** We use `ruff` for linting. Please run `ruff check .` before submitting.
-* **Documentation:** If you add a new flag or feature, please update the `README.md`.
-* **Commit Messages:** Follow conventional commits (e.g., `feat: add multisite support`).
+```
 
-## ⚖️ License
+
+3. **Commit Messages:** We follow **Conventional Commits** (e.g., `feat: add logging obfuscation`).
+4. **Documentation:** Update the `README.md` if you add new CLI arguments or `Makefile` targets.
+
+### 3. Reporting Issues
+
+* Use **GitHub Issues** to report bugs or request features.
+* For bugs, provide the output of `make help` to verify your environment setup and include your host OS details.
+
+---
+
+## Build System Architecture
+
+When adding new libraries, do not just add them to `requirements.txt`. Follow this flow:
+
+1. Add the dependency to `main.py`.
+2. Run `make deps` to freeze the updated environment.
+3. If the library uses C-extensions (like `paramiko`), update the `BUILD_FLAGS` in the `Makefile` to include the necessary `--collect-all` hooks.
+
+## License
 
 By contributing to this project, you agree that your contributions will be licensed under the **AGPLv3 License**.
