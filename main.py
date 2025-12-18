@@ -10,6 +10,18 @@ from typing import NamedTuple, Protocol, cast
 import paramiko
 
 
+# --- BINARY PATH UTILITY ---
+def get_base_path() -> str:
+    """
+    Returns the base directory for the application.
+    When running as a PyInstaller binary, sys.frozen is True and
+    sys.executable is the path to the .exe. Otherwise, it's the .py file.
+    """
+    if getattr(sys, "frozen", False):
+        return os.path.dirname(sys.executable)
+    return os.path.dirname(os.path.abspath(__file__))
+
+
 # Protocol for type-safe arguments
 class ToolArguments(Protocol):
     user: str
@@ -53,9 +65,13 @@ class WPMaintenanceTool:
         self.client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
 
         self.report_data: dict[str, str | list[str]] = {}
-        self.log_dir: str = "logs"
+
+        # Log directory relative to the binary location
+        base = get_base_path()
+        self.log_dir: str = os.path.join(base, "logs")
+
         if not os.path.exists(self.log_dir):
-            os.makedirs(self.log_dir)
+            os.makedirs(self.log_dir, exist_ok=True)
 
         # Setup Logging
         log_file = os.path.join(
@@ -82,14 +98,14 @@ class WPMaintenanceTool:
 
             res = self.run_command("which wp")
             if res.exit_status != 0:
-                raise WPMaintenanceError("WP-CLI not found for this user.")
+                raise WPMaintenanceError("WP-CLI not found on remote host.")
 
             self.logger.info("Connection established successfully.")
         except Exception as e:
             raise WPMaintenanceError(f"Connection failed: {e}")
 
     def run_command(self, command: str, timeout: int = 30) -> CommandResult:
-        """Executes a command with a specific timeout and PTY for better compatibility."""
+        """Executes a command with a specific timeout and PTY."""
         try:
             _, stdout, stderr = self.client.exec_command(
                 command, get_pty=True, timeout=timeout
@@ -105,7 +121,7 @@ class WPMaintenanceTool:
             return CommandResult("", "Command timed out", 124)
 
     def _wp_cli(self, wp_cmd: str) -> CommandResult:
-        """Executes WP-CLI commands securely with no-color flag."""
+        """Executes WP-CLI commands securely."""
         full_cmd = f"wp {wp_cmd} --path={shlex.quote(self.wp_path)} --no-color"
         return self.run_command(full_cmd)
 
@@ -119,7 +135,6 @@ class WPMaintenanceTool:
             return
 
         _ = self.run_command(f"mkdir -p {shlex.quote(self.wp_path)}")
-
         site_url = f"http://{self.host}:8080"
 
         commands = [
@@ -149,13 +164,12 @@ class WPMaintenanceTool:
             self.logger.error(f"Optimize failed: {res.stderr}")
 
     def backup_database(self) -> None:
-        # Create a unique timestamp for the filename
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         remote_path = f"/tmp/wp_bak_{timestamp}.sql"
         local_path = os.path.join(self.log_dir, f"wp_backup_{timestamp}.sql")
 
         try:
-            self.logger.info(f"Exporting database to {local_path}...")
+            self.logger.info(f"Exporting database to local: {local_path}...")
             export_res = self._wp_cli(f"db export {shlex.quote(remote_path)}")
 
             if export_res.exit_status == 0:
@@ -168,7 +182,6 @@ class WPMaintenanceTool:
         except Exception as e:
             self.logger.error(f"Backup process failed: {e}")
         finally:
-            # Clean up the remote file regardless of success/failure
             _ = self.run_command(f"rm {shlex.quote(remote_path)}")
 
     def perform_updates(self) -> None:
@@ -198,21 +211,18 @@ class WPMaintenanceTool:
             "plugin list --status=active --fields=name,version --format=csv --skip-column-names"
         )
 
-        if "Success: WordPress is at the latest version" in core.stdout:
-            status = "✅ Up to date"
-        else:
-            status = "⚠️ Update Available"
-
+        status = "✅ Up to date" if "Success" in core.stdout else "⚠️ Update Available"
         self.report_data["wp_update"] = status
-        if plugins.exit_status == 0 and plugins.stdout:
-            self.report_data["active_plugins"] = plugins.stdout.split("\n")
-        else:
-            self.report_data["active_plugins"] = ["None"]
+        self.report_data["active_plugins"] = (
+            plugins.stdout.split("\n") if plugins.stdout else ["None"]
+        )
 
     def generate_report(self) -> None:
         report_path = os.path.join(self.log_dir, "wp_report.md")
         insecure = self.report_data.get("insecure_dirs", [])
-        plugin_list = "\n".join(self.report_data.get("active_plugins") or [])
+        plugin_list = "\n".join(
+            cast(list[str], self.report_data.get("active_plugins", []))
+        )
 
         report_content = (
             f"# WP Maintenance Report: {self.host}\n\n"
@@ -231,7 +241,7 @@ class WPMaintenanceTool:
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="WP-Automator")
+    parser = argparse.ArgumentParser(description="MAXX-WP-Automator CLI")
     _ = parser.add_argument("--user", default="testuser")
     _ = parser.add_argument("--passw", default="password")
     _ = parser.add_argument("--host", default="127.0.0.1")
