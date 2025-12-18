@@ -17,6 +17,10 @@ class ToolArguments(Protocol):
     host: str
     port: int
     path: str
+    db_host: str
+    db_user: str
+    db_pass: str
+    db_name: str
     setup: bool
     clean: bool
     update: bool
@@ -85,9 +89,11 @@ class WPMaintenanceTool:
             raise WPMaintenanceError(f"Connection failed: {e}")
 
     def run_command(self, command: str, timeout: int = 30) -> CommandResult:
-        """Executes a command with a specific timeout."""
+        """Executes a command with a specific timeout and PTY for better compatibility."""
         try:
-            _, stdout, stderr = self.client.exec_command(command, timeout=timeout)
+            _, stdout, stderr = self.client.exec_command(
+                command, get_pty=True, timeout=timeout
+            )
             exit_status = stdout.channel.recv_exit_status()
             return CommandResult(
                 stdout.read().decode("utf-8").strip(),
@@ -99,8 +105,8 @@ class WPMaintenanceTool:
             return CommandResult("", "Command timed out", 124)
 
     def _wp_cli(self, wp_cmd: str) -> CommandResult:
-        """Executes WP-CLI commands securely."""
-        full_cmd = f"wp {wp_cmd} --path={shlex.quote(self.wp_path)}"
+        """Executes WP-CLI commands securely with no-color flag."""
+        full_cmd = f"wp {wp_cmd} --path={shlex.quote(self.wp_path)} --no-color"
         return self.run_command(full_cmd)
 
     def setup_wordpress(
@@ -143,20 +149,26 @@ class WPMaintenanceTool:
             self.logger.error(f"Optimize failed: {res.stderr}")
 
     def backup_database(self) -> None:
-        remote_path = f"/tmp/wp_bak_{os.urandom(4).hex()}.sql"
-        local_path = os.path.join(self.log_dir, "local_wp_backup.sql")
+        # Create a unique timestamp for the filename
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        remote_path = f"/tmp/wp_bak_{timestamp}.sql"
+        local_path = os.path.join(self.log_dir, f"wp_backup_{timestamp}.sql")
 
         try:
-            self.logger.info("Exporting database...")
+            self.logger.info(f"Exporting database to {local_path}...")
             export_res = self._wp_cli(f"db export {shlex.quote(remote_path)}")
+
             if export_res.exit_status == 0:
                 sftp = self.client.open_sftp()
                 sftp.get(remote_path, local_path)
                 sftp.close()
-                self.logger.info(f"Backup saved to: {local_path}")
+                self.logger.info("Backup successfully downloaded.")
             else:
                 self.logger.error(f"Export failed: {export_res.stderr}")
+        except Exception as e:
+            self.logger.error(f"Backup process failed: {e}")
         finally:
+            # Clean up the remote file regardless of success/failure
             _ = self.run_command(f"rm {shlex.quote(remote_path)}")
 
     def perform_updates(self) -> None:
@@ -182,7 +194,9 @@ class WPMaintenanceTool:
 
     def check_wp_status(self) -> None:
         core = self._wp_cli("core check-update")
-        plugins = self._wp_cli("plugin list --status=active --field=name,version")
+        plugins = self._wp_cli(
+            "plugin list --status=active --fields=name,version --format=csv --skip-column-names"
+        )
 
         if "Success: WordPress is at the latest version" in core.stdout:
             status = "✅ Up to date"
@@ -190,19 +204,18 @@ class WPMaintenanceTool:
             status = "⚠️ Update Available"
 
         self.report_data["wp_update"] = status
-        self.report_data["active_plugins"] = (
-            plugins.stdout.split("\n") if plugins.stdout else ["None"]
-        )
+        if plugins.exit_status == 0 and plugins.stdout:
+            self.report_data["active_plugins"] = plugins.stdout.split("\n")
+        else:
+            self.report_data["active_plugins"] = ["None"]
 
     def generate_report(self) -> None:
         report_path = os.path.join(self.log_dir, "wp_report.md")
         insecure = self.report_data.get("insecure_dirs", [])
-        plugin_list = "\n".join(
-            [f"* {p}" for p in (self.report_data.get("active_plugins") or [])]
-        )
+        plugin_list = "\n".join(self.report_data.get("active_plugins") or [])
 
         report_content = (
-            f"# 🗺️ WP Maintenance Report: {self.host}\n\n"
+            f"# WP Maintenance Report: {self.host}\n\n"
             f"### 🖥️ Health: Disk {self.report_data.get('disk_usage')} | Mem {self.report_data.get('mem_usage')}\n"
             f"### 🛡️ Status: Core {self.report_data.get('wp_update')} | 777 Dirs: {len(insecure)}\n\n"
             f"### 🔌 Active Plugins\n{plugin_list}\n"
@@ -219,11 +232,15 @@ class WPMaintenanceTool:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="WP-Automator")
-    _ = parser.add_argument("--user", required=True)
-    _ = parser.add_argument("--passw", required=True)
+    _ = parser.add_argument("--user", default="testuser")
+    _ = parser.add_argument("--passw", default="password")
     _ = parser.add_argument("--host", default="127.0.0.1")
     _ = parser.add_argument("--port", type=int, default=2222)
     _ = parser.add_argument("--path", default="/var/www/html")
+    _ = parser.add_argument("--db_host", default="db")
+    _ = parser.add_argument("--db_user", default="wp_user")
+    _ = parser.add_argument("--db_pass", default="wp_password")
+    _ = parser.add_argument("--db_name", default="wordpress")
     _ = parser.add_argument("--setup", action="store_true")
     _ = parser.add_argument("--clean", action="store_true")
     _ = parser.add_argument("--update", action="store_true")
@@ -239,7 +256,7 @@ if __name__ == "__main__":
         if args.clean:
             tool.clean_environment()
         if args.setup:
-            tool.setup_wordpress("wordpress", "wp_user", "wp_password", "db")
+            tool.setup_wordpress(args.db_name, args.db_user, args.db_pass, args.db_host)
         if args.update:
             tool.backup_database()
             tool.perform_updates()

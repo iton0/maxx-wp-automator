@@ -69,21 +69,21 @@ The **Makefile** provides a high-level interface for all common tasks. Manual CL
 **Full Lifecycle Test:**
 
 ```bash
-python main.py --user testuser --passw password --port 2222 --clean --setup
+python main.py --clean --setup
 
 ```
 
 **Maintenance Mode:**
 
 ```bash
-python main.py --user testuser --passw password --port 2222 --optimize --update
+python main.py --optimize --update
 
 ```
 
 **Quick Diagnostic:**
 
 ```bash
-python main.py --user testuser --passw password --port 2222
+python main.py
 
 ```
 
