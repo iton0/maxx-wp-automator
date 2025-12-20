@@ -15,7 +15,7 @@ def get_base_path() -> str:
     """
     Returns the base directory for the application.
     When running as a PyInstaller binary, sys.frozen is True and
-    sys.executable is the path to the .exe. Otherwise, it's the .py file.
+    sys.executable is the path to the executable. Otherwise, it's the .py file.
     """
     if getattr(sys, "frozen", False):
         return os.path.dirname(sys.executable)
@@ -48,6 +48,7 @@ class CommandResult(NamedTuple):
 class WPMaintenanceError(Exception):
     """Custom exception for WP Maintenance Tool errors."""
 
+    # TODO: add custom exceptions when better understand scope
     pass
 
 
