@@ -1,79 +1,81 @@
 # --- Configuration ---
 BINARY_NAME = maxx-wp
-PYTHON      = python
+# 'uv run' ensures we use the project's exact Python 3.14 environment
+PYTHON      = uv run python
 MAIN        = main.py
+BUILD_CMD   = uv run --group build pyinstaller
 BUILD_FLAGS = --noconfirm --onefile --console --collect-all "paramiko" --collect-all "cryptography" --clean
 
-# Default target (shows help)
+# Default target
 .DEFAULT_GOAL := help
 
-# --- Infrastructure ---
+# --- Infrastructure & Orchestration ---
 
 .PHONY: up
-up: ## Spin up Docker infrastructure and bootstrap WordPress
+up: ## [Infra] Spin up LAMP stack and bootstrap WordPress via SSH
 	docker compose up -d --build
 	@echo "Waiting for SSH to initialize..."
 	@sleep 5
 	$(PYTHON) $(MAIN) --clean --setup
 
 .PHONY: down
-down: ## Stop and remove Docker containers and volumes
+down: ## [Infra] Teardown containers and wipe volumes
 	docker compose down -v
 
-# --- Application Logic ---
+# --- Automation Logic ---
 
 .PHONY: maint
-maint: ## Trigger remote updates and database optimization
+maint: ## [App] Run remote maintenance (Update + DB Optimization)
 	$(PYTHON) $(MAIN) --update --optimize
 
 .PHONY: check
-check: ## Run a standard health check and generate report
+check: ## [App] Execute health diagnostics and generate Markdown report
 	$(PYTHON) $(MAIN)
 
 .PHONY: all
-all: up check ## Full lifecycle: Up -> Check -> Interactive Cleanup
+all: up check ## [Full] Lifecycle: Up -> Diagnose -> Prompted Cleanup
 	@echo ""
 	@read -p "Lifecycle complete. Run 'make clean' now? [y/N] " ans; \
 	if [ "$$ans" = "y" ] || [ "$$ans" = "Y" ]; then \
 		$(MAKE) clean; \
 	else \
-		echo "Cleanup skipped. Stopping containers."; \
-		$(MAKE) down; \
+		echo "Cleanup skipped. Keeping infra active."; \
 	fi
 
-# --- Environment & Dependency Management ---
+# --- Dependency Management (Modern uv) ---
 
 .PHONY: setup
-setup: ## Initialize environment and sync dependencies using uv
-	@echo "Installing project dependencies..."
-	uv pip install -r requirements.txt || uv pip install paramiko cryptography pyinstaller
+setup: ## [Deps] Bootstrap Python 3.14 environment and sync all libraries
+	@echo "🚀 Initializing environment..."
+	uv python install 3.14
+	uv sync
+	@echo "✅ Setup complete. Environment managed by uv."
 
-.PHONY: deps
-deps: ## Freeze current environment into requirements.txt
-	@echo "Freezing dependencies with uv..."
-	uv pip freeze | grep -v "@ file://" > requirements.txt
+.PHONY: lock
+lock: ## [Deps] Regenerate the uv.lock file
+	uv lock
 
-# --- Distribution & Cleanup ---
+# --- Build & Distribution ---
 
 .PHONY: dist
-dist: ## Build a portable production binary (Linux/Windows)
-	@echo "🚀 Building production binary with uv..."
-	uv run pyinstaller $(BUILD_ALL) $(BUILD_FLAGS) --name $(BINARY_NAME) $(MAIN)
-	@echo "✅ Build complete: ./dist/$(BINARY_NAME)"
+dist: ## [Build] Compile into a standalone, path-aware binary
+	@echo "📦 Compiling $(BINARY_NAME) with PyInstaller..."
+	$(BUILD_CMD) $(BUILD_FLAGS) --name $(BINARY_NAME) $(MAIN)
+	@echo "✅ Portable binary created: ./dist/$(BINARY_NAME)"
 
 .PHONY: dist-clean
-dist-clean: ## Remove build artifacts and .spec files
-	rm -rf build/ dist/ $(BINARY_NAME).spec
+dist-clean: ## [Build] Remove build artifacts and specs
+	rm -rf build/ dist/ *.spec
 
 .PHONY: clean
-clean: down ## Full wipe: Stop Docker and delete logs/builds
-	rm -rf logs/
-	@echo "Environment fully reset."
+clean: down dist-clean ## [Clean] Deep wipe: containers, logs, builds, and caches
+	rm -rf logs/ .ruff_cache/ .pytest_cache/
+	@echo "System fully sanitized."
 
-# --- Utilities ---
+# --- Help ---
 
 .PHONY: help
-help: ## Show this help message
-	@echo "Usage: make [target]"
-	@echo ""
+help: ## [Utils] Display this help menu
+	@echo "Maxx-WP-Automator CLI"
+	@echo "---------------------"
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-15s\033[0m %s\n", $$1, $$2}'

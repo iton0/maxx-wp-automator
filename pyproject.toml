@@ -1,0 +1,25 @@
+[project]
+name = "maxx-wp-automator"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = [
+    "bcrypt>=5.0.0",
+    "cryptography>=46.0.3",
+    "invoke>=2.2.1",
+    "nodejs-wheel-binaries>=24.12.0",
+    "packaging>=25.0",
+    "paramiko>=4.0.0",
+    "pynacl>=1.6.1",
+]
+
+[dependency-groups]
+build = [
+    "pyinstaller>=6.17.0",
+    "pyinstaller-hooks-contrib>=2025.11",
+]
+dev = [
+    "basedpyright>=1.36.2",
+    "ruff>=0.14.10",
+]

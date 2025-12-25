@@ -1,47 +1,42 @@
 # maxx-wp-automator
 
-> A high-performance command-line diagnostic and automation tool designed to manage remote WordPress installations via SSH. This project demonstrates proficiency in **Python automation**, **Linux systems administration**, **Docker orchestration**, and **modern package management**.
+> A high-performance command-line diagnostic and automation engine designed for industrial-grade management of remote WordPress infrastructure via SSH. This project showcases advanced **Python systems programming**, and **Production-ready CI/CD orchestration**.
 
-## Features
+## Key Capabilities
 
-* **Zero-Touch Bootstrap:** Automated WordPress installation (Core, Config, DB, and Admin) via SSH.
-* **Environment Reset:** A "Clean" function to safely wipe remote files and reset the database.
-* **Automated Maintenance:** Remote database optimization and core/plugin updates in a single command.
-* **Disaster Recovery:** Automated database backups transferred locally via SFTP before updates.
-* **Professional Reporting:** Generates a structured Markdown report (`logs/wp_report.md`) after every run.
-* **Portable Distribution:** Can be compiled into a standalone, path-aware binary for zero-dependency execution.
+* **Zero-Touch Provisioning:** Full-stack WordPress bootstrap (Core, Config, DB, and Admin) over secure SSH channels.
+* **Idempotent Maintenance:** Intelligent remote database optimization and version parity updates for core/plugins.
+* **Fail-Safe Disaster Recovery:** Automated pre-update snapshots via SFTP-tunneled database backups.
+* **Observable Diagnostics:** Real-time logging and automated generation of structured Markdown health reports (`logs/wp_report.md`).
+* **Single-Binary Distribution:** Compiled into a standalone, path-aware executable for zero-dependency portability.
 
 ---
 
 ## Tech Stack
 
-* **Python 3.14+** (Utilizing `NamedTuple`, `Protocol` typing, and `Paramiko`)
-* **Package Management:** **Conda** (Isolation) + **uv** (High-speed resolution)
-* **Infrastructure:** **Docker & Docker Compose** (LAMP stack + MariaDB)
-* **Orchestration:** **GNU Make** (Self-documenting build system)
-* **CMS Tooling:** **WP-CLI**
+* **Language:** **Python 3.14** (utilizing `NamedTuple`, `Protocol` structural typing, and `AsyncIO`)
+* **Package Management:** **uv** (Standardized via `pyproject.toml` and deterministic `uv.lock`)
+* **Infrastructure:** **Docker & Docker Compose** (Virtualized LAMP stack + MariaDB)
+* **Orchestration:** **GNU Make** (Self-documenting task runner)
+* **Security:** **Paramiko** (SSHv2 protocol) & **shlex** (Shell injection mitigation)
 
 ---
 
 ## Installation & Setup
 
-### 1. Initialize the Python Environment
+### 1. Unified Environment Setup
 
-This project uses **Conda** for the runtime and **uv** for library synchronization.
+This project uses **`uv`** to manage the entire toolchain. It will automatically download the required Python 3.14 interpreter and synchronize dependencies in seconds.
 
 ```bash
-# Create and activate the environment
-conda env create -f environment.yml
-conda activate wp-automator
-
-# Sync dependencies using the optimized uv manager
+# Install the environment and sync dependencies
 make setup
 
 ```
 
-### 2. Infrastructure Setup
+### 2. Infrastructure Bootstrapping
 
-The provided **Makefile** automates the Docker builds and initial WordPress bootstrap:
+Orchestrate the local containerized environment and trigger the initial remote bootstrap:
 
 ```bash
 make up
@@ -52,52 +47,55 @@ make up
 
 ## Usage Guide
 
-### Workflow Automation (via Make)
+### Automated Workflows (Makefile Interface)
 
-The `Makefile` serves as the primary entry point. Run `make` or `make help` to see all available commands.
+The `Makefile` serves as the primary control plane for the development lifecycle.
 
 | Command | Action |
 | --- | --- |
-| `make up` | Builds containers, waits for SSH, and performs a fresh `--setup`. |
-| `make maint` | Triggers `--update` (with backup) and `--optimize`. |
-| `make check` | Runs a standard health check and generates the Markdown report. |
-| `make dist` | Compiles the project into a standalone binary in `./dist`. |
-| `make clean` | Full teardown: removes containers, logs, and build artifacts. |
+| `make setup` | **Modern Toolchain:** Installs Python 3.14 and syncs `uv.lock`. |
+| `make up` | **Provision:** Spends up containers and executes initial `--setup`. |
+| `make maint` | **Optimize:** Triggers remote updates and DB maintenance. |
+| `make check` | **Audit:** Runs health checks and generates a diagnostic report. |
+| `make dist` | **Compile:** Builds a portable, standalone binary in `./dist`. |
+| `make clean` | **Reset:** Full wipe of containers, volumes, logs, and artifacts. |
 
 ### Standalone Binary Execution
 
-Once built via `make dist`, the tool can be run as a single executable without a Python environment. It is fully path-aware and will create its own `logs/` directory in its current location.
+The tool is designed for "run anywhere" capability. Once compiled, it operates without a local Python runtime.
 
 ```bash
-./dist/maxx-wp --host 1.2.3.4 --user deploy --update
+./dist/maxx-wp --host 10.0.0.5 --user engineer --update
 
 ```
 
 ---
 
-## Project Structure
+## Project Architecture
 
-* **`main.py`**: Core automation logic with binary-safe path resolution.
-* **`Makefile`**: Orchestration logic for Docker, dependencies, and PyInstaller.
-* **`environment.yml`**: Streamlined Conda environment manifest.
-* **`logs/`**: (Auto-generated relative to execution point)
-    * `wp_report.md`: Detailed diagnostic findings.
-    * `wp_backup_[timestamp].sql`: Local database snapshots.
-    * `maintenance_[date].log`: Technical execution logs.
+```text
+.
+├── .github/          # Automated CI/CD workflows
+├── src/              # Core automation logic
+├── pyproject.toml    # Universal project metadata (Industry Standard)
+├── uv.lock           # Deterministic dependency locking
+├── Makefile          # Unified task orchestration
+├── main.py           # Application entry point
+└── logs/             # (Auto-generated relative to binary)
+    ├── wp_report.md  # Detailed diagnostic findings
+    └── backups/      # Local database snapshots
 
-
-
----
-
-## Security & Architecture
-
-* **Binary-Safe Pathing:** Uses `sys.frozen` detection to ensure file I/O (logs/backups) is always relative to the executable path, preventing data loss in temporary directories.
-* **Non-Root Execution:** Operations are performed as `testuser` with consistent ownership between SSH and the web server.
-* **Command Sanitization:** All remote commands are wrapped in `shlex.quote()` to prevent shell injection.
-* **Idempotency:** The `--setup` routine verifies existing configurations to prevent accidental overwrites.
+```
 
 ---
 
-### Project Impact
+## Security & Design Patterns
 
-> Developed as a DevOps utility to eliminate manual WordPress audit tasks. By orchestrating SSH connections with WP-CLI and bundling the logic into a portable binary, this tool ensures that remote environments remain secure, updated, and optimized with zero manual intervention or local dependency overhead.
+* **Deterministic State:** Uses `uv.lock` to ensure "it works on my machine" translates to "it works in production."
+* **Binary-Safe Pathing:** Implements `sys.frozen` logic to ensure that even as a standalone executable, the tool correctly resolves relative paths for logs and backups.
+* **Least Privilege:** Designed for non-root execution with strict ownership mapping between SSH and the web server.
+* **Injection Guard:** All remote execution strings are sanitized using `shlex.quote()` to prevent command injection vulnerabilities.
+
+---
+
+> **Project Impact:** Developed to eliminate the friction of manual WordPress auditing. By abstracting complex SSH orchestration into a single, high-performance binary, this tool provides an enterprise-grade utility for maintaining remote server health with zero local overhead.
