@@ -1,28 +1,26 @@
 import argparse
 import logging
-import os
 import shlex
 import socket
 import sys
 from datetime import datetime
+from pathlib import Path
 from typing import NamedTuple, Protocol, cast
 
 import paramiko
 
 
-# --- BINARY PATH UTILITY ---
-def get_base_path() -> str:
+def get_base_path() -> Path:
     """
     Returns the base directory for the application.
-    When running as a PyInstaller binary, sys.frozen is True and
-    sys.executable is the path to the executable. Otherwise, it's the .py file.
+    Handles both source execution and PyInstaller frozen binaries.
     """
     if getattr(sys, "frozen", False):
-        return os.path.dirname(sys.executable)
-    return os.path.dirname(os.path.abspath(__file__))
+        return Path(sys.executable).parent
+
+    return Path(__file__).resolve().parent.parent
 
 
-# Protocol for type-safe arguments
 class ToolArguments(Protocol):
     user: str
     passw: str
@@ -48,42 +46,31 @@ class CommandResult(NamedTuple):
 class WPMaintenanceError(Exception):
     """Custom exception for WP Maintenance Tool errors."""
 
-    # TODO: add custom exceptions when better understand scope
+    # TODO: add custom exceptions when scope better understood
     pass
 
 
 class WPMaintenanceTool:
     def __init__(
-        self, host: str, port: int, user: str, password: str, wp_path: str
+        self,
+        host: str,
+        port: int,
+        user: str,
+        password: str,
+        wp_path: str,
+        log_dir: Path,
     ) -> None:
         self.host: str = host
         self.port: int = port
         self.user: str = user
         self.password: str = password
         self.wp_path: str = wp_path.rstrip("/")
+        self.log_dir: Path = log_dir
 
         self.client: paramiko.SSHClient = paramiko.SSHClient()
         self.client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
 
         self.report_data: dict[str, str | list[str]] = {}
-
-        # Log directory relative to the binary location
-        log_dir_name: str = "logs"
-        base: str = get_base_path()
-        self.log_dir: str = os.path.join(base, log_dir_name)
-
-        if not os.path.exists(self.log_dir):
-            os.makedirs(self.log_dir, exist_ok=True)
-
-        # Setup Logging
-        log_file: str = os.path.join(
-            self.log_dir, f"maintenance_{datetime.now().strftime('%Y%m%d')}.log"
-        )
-        logging.basicConfig(
-            level=logging.INFO,
-            format="%(asctime)s [%(levelname)s] %(message)s",
-            handlers=[logging.FileHandler(log_file), logging.StreamHandler(sys.stdout)],
-        )
         self.logger: logging.Logger = logging.getLogger(__name__)
 
     def connect(self) -> None:
@@ -134,6 +121,7 @@ class WPMaintenanceTool:
         check: CommandResult = self.run_command(
             f"ls {shlex.quote(self.wp_path)}/wp-config.php"
         )
+
         if check.exit_status == 0:
             self.logger.warning("WordPress already configured. Skipping setup.")
             return
@@ -170,7 +158,7 @@ class WPMaintenanceTool:
     def backup_database(self) -> None:
         timestamp: str = datetime.now().strftime("%Y%m%d_%H%M%S")
         remote_path: str = f"/tmp/wp_bak_{timestamp}.sql"
-        local_path: str = os.path.join(self.log_dir, f"wp_backup_{timestamp}.sql")
+        local_path: Path = self.log_dir / f"wp_backup_{timestamp}.sql"
 
         try:
             self.logger.info(f"Exporting database to local: {local_path}...")
@@ -180,7 +168,7 @@ class WPMaintenanceTool:
 
             if export_res.exit_status == 0:
                 sftp: paramiko.SFTPClient = self.client.open_sftp()
-                sftp.get(remote_path, local_path)
+                sftp.get(remote_path, str(local_path))
                 sftp.close()
                 self.logger.info("Backup successfully downloaded.")
             else:
@@ -206,6 +194,7 @@ class WPMaintenanceTool:
         mem: CommandResult = self.run_command(
             'free -m | awk \'/Mem:/ {print $3 "MB/" $2 "MB"}\''
         )
+
         self.report_data["disk_usage"] = (
             disk.stdout if disk.exit_status == 0 else "Unknown"
         )
@@ -228,7 +217,7 @@ class WPMaintenanceTool:
         )
 
     def generate_report(self) -> None:
-        report_path: str = os.path.join(self.log_dir, "wp_report.md")
+        report_path: Path = self.log_dir / "wp_report.md"
         insecure: str | list[str] = self.report_data.get("insecure_dirs", [])
         plugin_list: str = "\n".join(
             cast(list[str], self.report_data.get("active_plugins", []))
@@ -251,6 +240,20 @@ class WPMaintenanceTool:
 
 
 if __name__ == "__main__":
+    root_dir: Path = get_base_path()
+    logs_dir: Path = root_dir / "logs"
+    logs_dir.mkdir(exist_ok=True)
+
+    log_filename: str = f"maintenance_{datetime.now().strftime('%Y%m%d')}.log"
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(levelname)s] %(message)s",
+        handlers=[
+            logging.FileHandler(logs_dir / log_filename),
+            logging.StreamHandler(sys.stdout),
+        ],
+    )
+
     parser: argparse.ArgumentParser = argparse.ArgumentParser(
         description="MAXX-WP-Automator CLI"
     )
@@ -271,7 +274,7 @@ if __name__ == "__main__":
     args: ToolArguments = cast(ToolArguments, cast(object, parser.parse_args()))
 
     tool: WPMaintenanceTool = WPMaintenanceTool(
-        args.host, args.port, args.user, args.passw, args.path
+        args.host, args.port, args.user, args.passw, args.path, logs_dir
     )
 
     try:

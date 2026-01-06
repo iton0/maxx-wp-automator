@@ -2,7 +2,7 @@
 BINARY_NAME = maxx-wp
 # 'uv run' ensures we use the project's exact Python 3.14 environment
 PYTHON      = uv run python
-MAIN        = main.py
+MAIN        = src/main.py
 BUILD_CMD   = uv run --group build pyinstaller
 BUILD_FLAGS = --noconfirm --onefile --console --collect-all "paramiko" --collect-all "cryptography" --clean
 

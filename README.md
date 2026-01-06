@@ -75,18 +75,18 @@ The tool is designed for "run anywhere" capability. Once compiled, it operates w
 
 ```text
 .
-├── .github/          # Automated CI/CD workflows
-├── src/              # Core automation logic
-├── pyproject.toml    # Universal project metadata (Industry Standard)
-├── uv.lock           # Deterministic dependency locking
-├── Makefile          # Unified task orchestration
-├── main.py           # Application entry point
-└── logs/             # (Auto-generated relative to binary)
-    ├── wp_report.md  # Detailed diagnostic findings
-    └── backups/      # Local database snapshots
-
+├── .github/                # Automated CI/CD workflows & Actions
+├── logs/                   # (Auto-generated) Diagnostic reports & SQL snapshots
+│   ├── wp_report.md        # Structured health findings
+│   └── backups/            # Local database snapshots (SFTP-tunneled)
+├── src/                    # Source code directory
+│   └── main.py             # Core automation logic & Application entry point
+├── .gitignore              # Excludes .venv, logs, and __pycache__
+├── Makefile                # Unified task orchestration (setup, up, dist)
+├── pyproject.toml          # Universal project metadata & dependency definitions
+├── README.md               # Project documentation & high-level overview
+└── uv.lock                 # Deterministic, cross-platform dependency lockfile
 ```
-
 ---
 
 ## Security & Design Patterns
